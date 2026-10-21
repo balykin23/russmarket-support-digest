@@ -155,11 +155,73 @@ class TestFailSafe(unittest.TestCase):
         self.assertEqual(s.assess(case, NOW, StubExtractor({})).level, s.CHECK)
 
 
+class TestReviewFindings(unittest.TestCase):
+    """Cases found by an independent review of the first version."""
+
+    def test_delay_without_eta_is_not_silent(self):
+        case = delivery(deadline="2026-10-19T12:00:00", cid="K",
+                        chat=[{"author_role": "courier", "text": "Задерживаюсь, пробки"}])
+        r = s.assess(case, NOW, StubExtractor({"K": msg("delivery_delayed")}))
+        self.assertEqual(r.level, s.CHECK)
+
+    def test_case_with_actions_is_never_green(self):
+        case = delivery(deadline="2026-10-19T12:00:00", cid="K2",
+                        chat=[{"author_role": "courier", "text": "буду в 9:30"}])
+        r = s.assess(case, NOW, StubExtractor({"K2": msg("delivery_delayed", eta="09:30")}))
+        self.assertNotEqual(r.level, s.OK)  # promised time already passed
+
+    def test_latest_delivery_message_wins(self):
+        case = delivery(deadline="2026-10-19T09:00:00", cid="L",
+                        chat=[{"author_role": "courier", "text": "буду в 13:00"},
+                              {"author_role": "recipient", "text": "карты получили"}])
+        answers = {"L": {"messages": [
+            {"index": 0, "claim": "delivery_delayed", "eta": "13:00", "unofficial_channel": False},
+            {"index": 1, "claim": "delivery_received", "eta": None, "unofficial_channel": False}]}}
+        r = s.assess(case, NOW, StubExtractor(answers))
+        self.assertIn("Попросить точку провести приёмку в CRM", r.actions)
+        self.assertFalse(any("13:00" in x for x in r.actions))
+
+    def test_eta_anchored_to_deadline_day(self):
+        case = delivery(deadline="2026-10-20T10:00:00", cid="M",
+                        chat=[{"author_role": "courier", "text": "завтра раньше 13:00 не приеду"}])
+        r = s.assess(case, NOW, StubExtractor({"M": msg("delivery_delayed", eta="13:00")}))
+        self.assertEqual(r.level, s.HIGH)
+
+    def test_broken_crm_record_does_not_crash(self):
+        case = {"id": "N", "type": "onboarding", "title": "t",
+                "crm": {"first_day": "20.10.2026", "documents_received": False}, "chat": []}
+        r = s.assess(case, NOW, StubExtractor({}))
+        self.assertEqual(r.level, s.CHECK)
+
+    def test_business_days_friday_to_monday(self):
+        friday = datetime(2026, 10, 23, 10, 0)
+        case = {"id": "O", "type": "onboarding", "title": "t",
+                "crm": {"first_day": "2026-10-26", "documents_received": False}, "chat": []}
+        self.assertEqual(s.assess(case, friday, StubExtractor({})).level, s.HIGH)
+
+    def test_cancelled_and_unknown_statuses_are_shown(self):
+        for status in ("Отменено", "Возврат"):
+            r = s.assess(delivery(status=status, deadline="2026-10-19T15:00:00"), NOW, StubExtractor({}))
+            self.assertEqual(r.level, s.CHECK, status)
+
+    def test_accepted_without_time_is_checked_not_critical(self):
+        r = s.assess(delivery(status="Принято", accepted_at=None), NOW, StubExtractor({}))
+        self.assertEqual(r.level, s.CHECK)
+
+    def test_manager_message_matching_crm_is_not_an_alarm(self):
+        case = {"id": "P", "type": "offboarding", "title": "t",
+                "crm": {"last_day": "2026-10-19", "manager_confirmed": True},
+                "chat": [{"author_role": "employee", "text": "он в курсе"}]}
+        r = s.assess(case, NOW, StubExtractor({"P": msg("manager_informed")}))
+        self.assertEqual(r.level, s.OK)
+
+
 class TestPII(unittest.TestCase):
     def test_masking(self):
-        text = "звоните +7 916 123-45-67, почта a.b@mail.ru, паспорт 45 12 345678, карта 2200 1234 5678 9012"
+        text = ("звоните +7 916 123-45-67, почта a.b@mail.ru, паспорт 45 12 345678, "
+                "карта 2200 1234 5678 9012, СНИЛС 112-233-445 95, ИНН 500100732259")
         masked = s.mask_pii(text)
-        for leaked in ("916", "mail.ru", "345678", "9012"):
+        for leaked in ("916", "mail.ru", "345678", "9012", "445", "732259"):
             self.assertNotIn(leaked, masked)
 
     def test_payload_to_llm_is_masked(self):

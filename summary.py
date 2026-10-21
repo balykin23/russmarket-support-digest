@@ -24,7 +24,7 @@ import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -49,7 +49,7 @@ TYPE_RANK = {"offboarding": 0, "card_delivery": 1, "onboarding": 2}
 TYPE_REASON = {
     "offboarding": "при равной срочности увольнение идёт первым: расчёт и документы "
                    "выдаются в последний рабочий день, ошибку потом не исправить",
-    "card_delivery": "при равной срочности доставка идёт раньше оформления: точка ждёт карты сейчас",
+    "card_delivery": "при равной срочности доставка идёт раньше оформления: по ней хватает звонка на точку",
 }
 
 # ---------------------------------------------------------------------------
@@ -127,8 +127,10 @@ PII_PATTERNS = [
     ("[КАРТА]", re.compile(r"\b(?:\d[ -]?){15}\d\b")),
     ("[ТЕЛЕФОН]", re.compile(r"(?:\+7|\b8)[\s\-()]*\d{3}[\s\-()]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}\b")),
     ("[EMAIL]", re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")),
-    ("[ПАСПОРТ]", re.compile(r"\b\d{2}\s?\d{2}\s?\d{6}\b")),
+    ("[СНИЛС]", re.compile(r"\b\d{3}-\d{3}-\d{3}[ -]?\d{2}\b")),
+    ("[ДОКУМЕНТ]", re.compile(r"\b\d{2}\s?\d{2}\s?\d{6}\b|\b\d{12}\b")),  # passport / INN
 ]
+# Names are NOT masked: that needs an NER model, regexes are not enough.
 
 
 def mask_pii(text: str) -> str:
@@ -276,6 +278,14 @@ def fmt_dt(dt: datetime, now: datetime) -> str:
     return f"{dt:%d.%m %H:%M}"
 
 
+def business_days_left(today: date, target: date) -> int:
+    """Working days from today to target (Mon-Fri). Public holidays are NOT counted yet."""
+    if target <= today:
+        return (target - today).days
+    return sum(1 for i in range(1, (target - today).days + 1)
+               if (today + timedelta(days=i)).weekday() < 5)
+
+
 def level_by_days(days_left: int) -> int:
     if days_left <= 0:
         return CRITICAL
@@ -288,25 +298,28 @@ def level_by_days(days_left: int) -> int:
 
 def assess_onboarding(a: Assessment, crm: dict, today: date) -> None:
     first_day = date.fromisoformat(crm["first_day"])
-    days = (first_day - today).days
+    days = business_days_left(today, first_day)
     a.crm.append(f"Первый выход: {first_day:%d.%m} ({rel_day(first_day, today)})")
     if crm.get("documents_received"):
         a.crm.append("Документы получены")
         return
     a.crm.append("Документы НЕ получены")
     lvl = level_by_days(days)
+    if lvl == OK:
+        a.why = f"первый выход {rel_day(first_day, today)} — документы пока не горят"
+        return
     if days < 0:
         a.raise_to(lvl, "первый выход уже прошёл, а документов в CRM нет")
-        a.actions.append("Выяснить у руководителя, вышел ли сотрудник и на каком основании допущен без документов")
-    elif lvl != OK:
+        a.actions.append("Руководителю: выяснить, вышел ли сотрудник и на каком основании допущен без документов")
+    else:
         a.raise_to(lvl, f"первый выход {rel_day(first_day, today)}, документов в CRM нет")
-    a.check.append("Где документы сейчас и все ли они читаемы")
+    a.check.append("Где документы сейчас, все ли они есть и читаются ли")
     a.actions.append("Получить документы в рабочем канале и отметить получение в CRM")
 
 
 def assess_offboarding(a: Assessment, crm: dict, today: date) -> None:
     last_day = date.fromisoformat(crm["last_day"])
-    days = (last_day - today).days
+    days = business_days_left(today, last_day)
     a.crm.append(f"Последний рабочий день: {last_day:%d.%m} ({rel_day(last_day, today)})")
     if crm.get("manager_confirmed"):
         a.crm.append("Руководитель подтвердил")
@@ -317,19 +330,34 @@ def assess_offboarding(a: Assessment, crm: dict, today: date) -> None:
         a.why = f"увольнение {rel_day(last_day, today)} — подтверждение пока не горит"
         return
     a.raise_to(lvl, f"последний день {rel_day(last_day, today)}, руководитель не подтвердил")
-    a.actions.append("Написать руководителю напрямую и получить подтверждение в CRM")
+    a.actions.append("Руководителю напрямую: подтвердить увольнение в CRM; нет ответа до обеда — эскалировать")
     if days <= 0:
-        a.actions.append("Сегодня же пройти чек-лист увольнения: расчёт, документы, возврат имущества и доступов")
+        a.actions.append("Предупредить HR и бухгалтерию: расчёт и документы — сегодня, подтверждения пока нет")
+
+
+DELIVERY_IN_TRANSIT, DELIVERY_ACCEPTED, DELIVERY_CANCELLED = "В пути", "Принято", "Отменено"
 
 
 def assess_delivery(a: Assessment, crm: dict, now: datetime) -> None:
     deadline = datetime.fromisoformat(crm["deadline"])
     status = crm.get("status", "")
     accepted_at = crm.get("accepted_at")
-    if status == "Принято" and accepted_at:
-        a.crm.append(f"Статус «Принято», приёмка {fmt_dt(datetime.fromisoformat(accepted_at), now)}")
+    if status == DELIVERY_ACCEPTED:
+        if accepted_at:
+            a.crm.append(f"Статус «Принято», приёмка {fmt_dt(datetime.fromisoformat(accepted_at), now)}")
+        else:
+            a.crm.append("Статус «Принято», но время приёмки не заполнено")
+            a.raise_to(CHECK, "статус «Принято» без времени приёмки")
+            a.check.append("Проверить запись о приёмке в CRM")
         return
     a.crm.append(f"Статус «{status}», срок доставки {fmt_dt(deadline, now)}")
+    if status == DELIVERY_CANCELLED:
+        a.raise_to(CHECK, "доставка отменена")
+        a.actions.append("Уточнить, будет ли повторная доставка, и предупредить точку")
+        return
+    if status != DELIVERY_IN_TRANSIT:  # unknown status: never treat silently as normal
+        a.raise_to(CHECK, f"неизвестный статус доставки «{status}»")
+        a.check.append("Проверить статус доставки в CRM")
     if now >= deadline:  # "до 10:00" and it is 10:00 with no acceptance -> overdue
         late = int((now - deadline).total_seconds() // 60)
         if late == 0:
@@ -341,53 +369,73 @@ def assess_delivery(a: Assessment, crm: dict, now: datetime) -> None:
         a.raise_to(CRITICAL, "срок доставки наступил, в CRM карты не приняты")
 
 
+def quote(text: str) -> str:
+    # Quote the original message instead of an LLM paraphrase: a live run showed the model
+    # strengthening claims ("он в курсе" -> "всё согласовано"). The model only classifies.
+    return "«" + (text if len(text) <= 200 else text[:197] + "...") + "»"
+
+
 def apply_chat(a: Assessment, items: list[dict], now: datetime) -> None:
     ctype, crm = a.case["type"], a.case["crm"]
     msgs = a.case.get("chat", [])
+    # Messages are in chronological order. For delivery progress the latest message wins:
+    # "задерживаюсь" followed by "карты получили" must not produce both sets of actions.
+    progress = [i["index"] for i in items if i["claim"] in ("delivery_delayed", "delivery_received")]
+    superseded = set(progress[:-1])
+
     for item in items:
-        role = ROLE_RU.get(msgs[item["index"]]["author_role"], msgs[item["index"]]["author_role"])
-        # Quote the original message instead of an LLM paraphrase: a live run showed the model
-        # strengthening claims ("он в курсе" -> "всё согласовано"). The model only classifies.
-        text = msgs[item["index"]]["text"]
-        summary = "«" + (text if len(text) <= 200 else text[:197] + "...") + "»"
+        msg = msgs[item["index"]]
+        author = msg["author_role"]
+        role = ROLE_RU.get(author, author)
+        summary = quote(msg["text"])
         claim = item["claim"]
         if claim == "no_info":
             continue
 
         if item.get("unofficial_channel"):
-            a.flags.append("Документы с персональными данными ушли в личные сообщения — "
-                           "перевести в рабочий канал, из лички удалить")
+            note = "Данные переданы в обход рабочего канала (личные сообщения) — перевести в рабочий канал"
+            if ctype == "onboarding":
+                note += "; документы с персональными данными из лички удалить"
+            a.flags.append(note)
 
-        if claim == "documents_sent" and ctype == "onboarding" and not crm.get("documents_received"):
-            a.chat.append(f"{role}: {summary} — в CRM не подтверждено")
-            a.check.append("Подтвердить у руководителя, что документы действительно получены")
-        elif claim == "manager_informed" and ctype == "offboarding" and not crm.get("manager_confirmed"):
-            a.chat.append(f"{role}: {summary} — это слова сотрудника, не подтверждение")
-            a.check.append("Слова сотрудника не заменяют подтверждение — спросить руководителя напрямую")
-        elif claim == "delivery_received":
-            if crm.get("status") == "Принято":
+        if item["index"] in superseded:
+            a.chat.append(f"{role}: {summary} — устарело, есть более позднее сообщение")
+            continue
+
+        if claim == "documents_sent" and ctype == "onboarding":
+            if crm.get("documents_received"):
+                a.chat.append(f"{role}: {summary} — совпадает с CRM")
+            elif author == "manager":
+                a.chat.append(f"{role}: {summary} — в CRM не отмечено")
+                a.actions.insert(0, "Руководителю: отметить получение документов в CRM")
+            else:
+                a.chat.append(f"{role}: {summary} — в CRM не подтверждено")
+                a.check.append("Подтвердить у руководителя, что документы действительно у него")
+                a.actions.insert(0, "Руководителю: переслать документы в рабочий канал; "
+                                    "сотруднику: принести оригиналы к первому выходу")
+        elif claim == "manager_informed" and ctype == "offboarding":
+            if crm.get("manager_confirmed"):
+                a.chat.append(f"{role}: {summary} — совпадает с CRM")
+            elif author == "manager":
+                a.chat.append(f"{role}: {summary} — руководитель пишет сам, но в CRM не отмечено")
+                a.actions.insert(0, "Руководителю: продублировать подтверждение в CRM")
+            else:
+                a.chat.append(f"{role}: {summary} — это слова сотрудника, не подтверждение")
+                a.check.append("Слова сотрудника не заменяют подтверждение — спросить руководителя напрямую")
+        elif claim == "delivery_received" and ctype == "card_delivery":
+            if crm.get("status") == DELIVERY_ACCEPTED:
                 a.chat.append(f"{role}: {summary} — совпадает с CRM")
             else:
                 a.chat.append(f"{role}: {summary} — в CRM приёмки нет")
+                if a.level == CRITICAL:
+                    a.why = "срок прошёл; точка пишет, что карты пришли, но в CRM приёмки нет"
                 a.check.append("Подтвердить у точки получение и количество")
                 a.actions.insert(0, "Попросить точку провести приёмку в CRM")
-        elif claim == "delivery_delayed":
-            eta_txt = f" (новое время {item['eta']})" if item.get("eta") and item["eta"] not in summary else ""
-            a.chat.append(f"{role}: {summary}{eta_txt} — в CRM не отражено")
-            if item.get("eta"):
-                h, m = map(int, item["eta"].split(":"))
-                eta = now.replace(hour=h, minute=m, second=0, microsecond=0)
-                deadline = datetime.fromisoformat(crm["deadline"])
-                if eta > deadline:
-                    if now < deadline:
-                        a.raise_to(HIGH, f"курьер прогнозирует опоздание: {item['eta']} при сроке {deadline:%H:%M}")
-                    a.actions.insert(0, f"Предупредить точку: карты будут не раньше {item['eta']}")
-                a.actions.append(f"Обновить срок в CRM и проверить статус после {item['eta']}")
-            else:
-                a.actions.append("Узнать у курьера точное время прибытия и внести в CRM")
+        elif claim == "delivery_delayed" and ctype == "card_delivery":
+            apply_delay(a, item, role, summary, crm, now)
         elif claim == "problem_reported":
             a.chat.append(f"{role}: {summary} — в CRM не отражено")
-            a.raise_to(HIGH, "в CRM всё в порядке, но в переписке сообщают о проблеме")
+            a.raise_to(HIGH, "в переписке сообщают о проблеме, которой нет в CRM")
             a.check.append("Связаться с автором сообщения и подтвердить проблему")
             a.actions.append("Если подтвердится — зафиксировать расхождение в CRM")
         else:
@@ -396,10 +444,46 @@ def apply_chat(a: Assessment, items: list[dict], now: datetime) -> None:
             a.check.append("Прочитать сообщение и решить, нужно ли действие")
 
 
+def apply_delay(a: Assessment, item: dict, role: str, summary: str, crm: dict, now: datetime) -> None:
+    eta_s = item.get("eta")
+    eta_txt = f" (новое время {eta_s})" if eta_s and eta_s not in summary else ""
+    a.chat.append(f"{role}: {summary}{eta_txt} — в CRM не отражено")
+    if not eta_s:
+        a.raise_to(CHECK, "курьер сообщает о задержке, но не называет время")
+        a.actions.append("Узнать у курьера точное время прибытия и внести в CRM")
+        return
+    deadline = datetime.fromisoformat(crm["deadline"])
+    # HH:MM is anchored to the deadline's day (a delivery due tomorrow, ETA tomorrow).
+    # Not handled yet: an ETA after midnight; the message timestamp would resolve it.
+    day = deadline.date() if deadline.date() > now.date() else now.date()
+    h, m = map(int, eta_s.split(":"))
+    eta = datetime.combine(day, datetime.min.time()).replace(hour=h, minute=m)
+    if eta <= now:
+        a.raise_to(CHECK, f"курьер называл {eta_s}, это время уже прошло")
+        a.actions.append("Связаться с курьером: названное время прошло, где карты")
+        return
+    if eta > deadline:
+        if now < deadline:
+            a.raise_to(HIGH, f"курьер прогнозирует опоздание: {eta_s} при сроке {deadline:%H:%M}")
+        a.actions.insert(0, f"Предупредить точку: карты будут не раньше {eta_s}; уточнить, работает ли она в это время")
+        a.actions.append(f"Обновить срок в CRM и проверить статус после {eta_s}")
+
+
 ROLE_RU = {"employee": "Сотрудник", "courier": "Курьер", "recipient": "Получатель", "manager": "Руководитель"}
 
 
 def assess(case: dict, now: datetime, extractor: Extractor) -> Assessment:
+    try:
+        return _assess(case, now, extractor)
+    except (KeyError, ValueError, TypeError, AttributeError) as e:  # broken CRM record: show it, don't crash
+        a = Assessment(case=case)
+        a.raise_to(CHECK, "данные CRM по кейсу некорректны")
+        a.crm.append(f"Запись не удалось разобрать ({type(e).__name__}: {e})")
+        a.check.append("Открыть кейс в CRM и проверить поля вручную")
+        return a
+
+
+def _assess(case: dict, now: datetime, extractor: Extractor) -> Assessment:
     a = Assessment(case=case)
     crm = case["crm"]
     if case["type"] == "onboarding":
@@ -426,6 +510,9 @@ def assess(case: dict, now: datetime, extractor: Extractor) -> Assessment:
         a.actions.append("Предупредить точку о задержке")
     if not case.get("chat") and a.needs_action:
         a.chat.append("Переписки по кейсу нет")
+    # Invariant: a case with something to check or do is never shown as "no action".
+    if a.level == OK and (a.check or a.actions):
+        a.raise_to(CHECK, a.why or "есть открытые вопросы")
     # de-duplicate while keeping order
     for attr in ("check", "actions", "flags"):
         setattr(a, attr, list(dict.fromkeys(getattr(a, attr))))
@@ -451,7 +538,8 @@ def render_markdown(results: list[Assessment], now: datetime) -> str:
     if todo:
         first = todo[0]
         out.append(f"**Начать с {first.case['id']}** — {first.why}.")
-        if len(todo) > 1 and todo[1].level == first.level and first.case["type"] in TYPE_REASON:
+        if (len(todo) > 1 and todo[1].level == first.level
+                and todo[1].case["type"] != first.case["type"] and first.case["type"] in TYPE_REASON):
             out.append(f"Почему раньше {todo[1].case['id']}: {TYPE_REASON[first.case['type']]}.")
         out.append("")
         out.append("Порядок: " + " → ".join(r.case["id"] for r in todo))
@@ -464,7 +552,7 @@ def render_markdown(results: list[Assessment], now: datetime) -> str:
         for line in r.crm:
             out.append(f"- ✅ {line}")
         for line in r.chat:
-            out.append(f"- 💬 {line}")
+            out.append(f"- 💬 {mask_pii(line)}")
         if r.check:
             out.append("")
             out.append("**Проверить перед действием:**")

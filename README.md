@@ -22,7 +22,7 @@ CRM + сообщения из чатов
 ```bash
 python3 summary.py data/cases.json                   # четыре кейса из задания (записанные ответы модели, ключ не нужен)
 python3 summary.py data/edge_cases.json              # шесть пограничных кейсов
-python3 -m unittest -v                               # 22 теста правил (модель заменена заглушкой)
+python3 -m unittest -v                               # 31 тест правил (модель заменена заглушкой)
 
 cp .env.example .env                                 # OPENAI_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 python3 summary.py data/cases.json --mode live       # реальный вызов модели
