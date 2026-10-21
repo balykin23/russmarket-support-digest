@@ -1,0 +1,93 @@
+{
+  "now": "2026-10-19T10:00:00",
+  "cases": [
+    {
+      "id": "E-01",
+      "type": "card_delivery",
+      "title": "Чат говорит «получили», CRM — «В пути», срок прошёл",
+      "crm": {
+        "status": "В пути",
+        "deadline": "2026-10-19T09:00:00",
+        "accepted_at": null
+      },
+      "chat": [
+        {
+          "author_role": "recipient",
+          "text": "Всё пришло, спасибо!"
+        }
+      ]
+    },
+    {
+      "id": "E-02",
+      "type": "card_delivery",
+      "title": "CRM — «Принято», а в чате жалоба на недостачу",
+      "crm": {
+        "status": "Принято",
+        "deadline": "2026-10-19T10:00:00",
+        "accepted_at": "2026-10-19T08:50:00"
+      },
+      "chat": [
+        {
+          "author_role": "recipient",
+          "text": "Пересчитали — не хватает двух карт, в пачке 48 вместо 50."
+        }
+      ]
+    },
+    {
+      "id": "E-03",
+      "type": "offboarding",
+      "title": "Увольнение через неделю, переписки нет",
+      "crm": {
+        "last_day": "2026-10-26",
+        "manager_confirmed": false
+      },
+      "chat": []
+    },
+    {
+      "id": "E-04",
+      "type": "onboarding",
+      "title": "CRM в норме, в чате неясный сигнал",
+      "crm": {
+        "first_day": "2026-10-22",
+        "documents_received": true
+      },
+      "chat": [
+        {
+          "author_role": "employee",
+          "text": "Тут кое-что поменялось по выходу, позвоню."
+        }
+      ]
+    },
+    {
+      "id": "E-05",
+      "type": "onboarding",
+      "title": "Первый выход уже прошёл, документов нет; в сообщении телефон",
+      "crm": {
+        "first_day": "2026-10-16",
+        "documents_received": false
+      },
+      "chat": [
+        {
+          "author_role": "employee",
+          "text": "Документы принесу в офис, если что звоните +7 916 123-45-67."
+        }
+      ]
+    },
+    {
+      "id": "E-06",
+      "type": "card_delivery",
+      "title": "Доставка ещё не просрочена, но курьер пишет, что опоздает",
+      "crm": {
+        "status": "В пути",
+        "deadline": "2026-10-19T15:00:00",
+        "accepted_at": null
+      },
+      "chat": [
+        {
+          "author_role": "courier",
+          "text": "Пробки, буду к 17 часам."
+        }
+      ]
+    }
+  ]
+}

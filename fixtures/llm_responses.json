@@ -1,0 +1,130 @@
+{
+  "С-17": {
+    "messages": [
+      {
+        "index": 0,
+        "claim": "documents_sent",
+        "eta": null,
+        "unofficial_channel": true
+      }
+    ]
+  },
+  "С-24": {
+    "messages": [
+      {
+        "index": 0,
+        "claim": "manager_informed",
+        "eta": null,
+        "unofficial_channel": false
+      }
+    ]
+  },
+  "П-08": {
+    "messages": [
+      {
+        "index": 0,
+        "claim": "delivery_delayed",
+        "eta": "13:00",
+        "unofficial_channel": false
+      }
+    ]
+  },
+  "П-09": {
+    "messages": [
+      {
+        "index": 0,
+        "claim": "delivery_received",
+        "eta": null,
+        "unofficial_channel": false
+      }
+    ]
+  },
+  "E-01": {
+    "messages": [
+      {
+        "index": 0,
+        "claim": "delivery_received",
+        "eta": null,
+        "unofficial_channel": false
+      }
+    ]
+  },
+  "E-02": {
+    "messages": [
+      {
+        "index": 0,
+        "claim": "problem_reported",
+        "eta": null,
+        "unofficial_channel": false
+      }
+    ]
+  },
+  "E-04": {
+    "messages": [
+      {
+        "index": 0,
+        "claim": "other",
+        "eta": null,
+        "unofficial_channel": false
+      }
+    ]
+  },
+  "E-05": {
+    "messages": [
+      {
+        "index": 0,
+        "claim": "other",
+        "eta": null,
+        "unofficial_channel": false
+      }
+    ]
+  },
+  "E-06": {
+    "messages": [
+      {
+        "index": 0,
+        "claim": "delivery_delayed",
+        "eta": "17:00",
+        "unofficial_channel": false
+      }
+    ]
+  },
+  "_meta": {
+    "С-17": {
+      "model": "gpt-5.4-mini",
+      "recorded_at": "2026-10-21T13:16:12"
+    },
+    "С-24": {
+      "model": "gpt-5.4-mini",
+      "recorded_at": "2026-10-21T13:16:12"
+    },
+    "П-08": {
+      "model": "gpt-5.4-mini",
+      "recorded_at": "2026-10-21T13:16:12"
+    },
+    "П-09": {
+      "model": "gpt-5.4-mini",
+      "recorded_at": "2026-10-21T13:16:12"
+    },
+    "E-01": {
+      "model": "gpt-5.4-mini",
+      "recorded_at": "2026-10-21T13:16:22"
+    },
+    "E-02": {
+      "model": "gpt-5.4-mini",
+      "recorded_at": "2026-10-21T13:16:22"
+    },
+    "E-04": {
+      "model": "gpt-5.4-mini",
+      "recorded_at": "2026-10-21T13:16:22"
+    },
+    "E-05": {
+      "model": "gpt-5.4-mini",
+      "recorded_at": "2026-10-21T13:16:22"
+    },
+    "E-06": {
+      "model": "gpt-5.4-mini",
+      "recorded_at": "2026-10-21T13:16:22"
+    }
+  }
+}
