@@ -1,0 +1,658 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style></head><body><title>Утренняя сводка support</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=Unbounded:wght@500;700&display=swap">
+<style>
+/* Layout: a support desk's morning board. The time ruler is the hero; cards below re-sort as "now" moves.
+   Confirmed-in-CRM facts are solid; chat-only claims sit in dashed boxes, so "unconfirmed" reads by form. */
+:root {
+  --bg: #f2f4f3; --surface: #ffffff; --ink: #18212b; --muted: #5a6572; --line: #d8dcda;
+  --accent: #1d5b8f; --accent-soft: #e3edf6;
+  --chat: #8a5a12; --chat-bg: #fbf5ea;
+  --crit: #c3352b; --crit-bg: #fbe9e7; --high: #c66a14; --high-bg: #fcefe1;
+  --check: #8f7a0e; --check-bg: #f8f2d8; --ok: #2f7d50; --ok-bg: #e5f3ea;
+  --f-display: "Unbounded", "Golos Text", system-ui, sans-serif;
+  --f-body: "Golos Text", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12171d; --surface: #1a2129; --ink: #e6eaee; --muted: #9aa5b1; --line: #2c3540;
+  --accent: #7fb3e0; --accent-soft: #1d2e3f; --chat: #e0b56e; --chat-bg: #2a2418;
+  --crit: #ff8a7e; --crit-bg: #3a1f1d; --high: #f3a65a; --high-bg: #3a2a19;
+  --check: #dcc65a; --check-bg: #33301a; --ok: #7fcf9d; --ok-bg: #1b3326; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #12171d; --surface: #1a2129; --ink: #e6eaee; --muted: #9aa5b1; --line: #2c3540;
+  --accent: #7fb3e0; --accent-soft: #1d2e3f; --chat: #e0b56e; --chat-bg: #2a2418;
+  --crit: #ff8a7e; --crit-bg: #3a1f1d; --high: #f3a65a; --high-bg: #3a2a19;
+  --check: #dcc65a; --check-bg: #33301a; --ok: #7fcf9d; --ok-bg: #1b3326; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 32px 56px; display: grid; gap: 48px; }
+h1, h2 { font-family: var(--f-display); font-weight: 700; text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(28px, 5vw, 44px); line-height: 1.1; }
+h2 { font-size: clamp(20px, 3vw, 26px); line-height: 1.2; }
+h3 { font-size: 15px; margin: 0; font-weight: 600; }
+p { margin: 0; }
+a { color: var(--accent); }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.lead { font-size: 17px; max-width: 65ch; color: var(--ink); }
+header.top { display: grid; gap: 14px; }
+.links { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 14px; }
+section { display: grid; gap: 18px; }
+.sec-head { display: grid; gap: 6px; max-width: 70ch; }
+
+/* --- demo controls --- */
+.board { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: clamp(16px, 3vw, 28px); display: grid; gap: 22px; }
+.ctrl { display: grid; gap: 14px; }
+.ctrl-row { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+.clock { display: grid; gap: 2px; }
+.clock .big { font-family: var(--f-display); font-weight: 500; font-size: clamp(26px, 4vw, 36px); font-variant-numeric: tabular-nums; line-height: 1; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; gap: 3px; background: var(--bg); }
+.seg button { border: 0; background: transparent; color: var(--muted); font: 500 14px var(--f-body); padding: 7px 14px; border-radius: 999px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.ruler { display: grid; gap: 6px; }
+input[type=range] { width: 100%; accent-color: var(--accent); height: 28px; cursor: pointer; }
+.ticks { position: relative; height: 34px; font-family: var(--f-mono); font-size: 11px; color: var(--muted); }
+.ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; top: 0; }
+.ticks span.day { top: 16px; color: var(--ink); font-weight: 600; transform: none; }
+.ticks span.mark { color: var(--accent); }
+@media (max-width: 640px) { .ticks span.minor { display: none; } }
+.presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: 13px var(--f-body); padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+.chip:hover { border-color: var(--accent); }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* --- summary line --- */
+.verdict { display: grid; gap: 8px; padding: 14px 16px; border-radius: var(--r); background: var(--accent-soft); }
+.verdict .start { font-size: 17px; }
+.order { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-family: var(--f-mono); font-size: 13px; }
+.order b { padding: 2px 8px; border-radius: 6px; background: var(--surface); }
+
+/* --- cards --- */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 14px; align-items: start; }
+.card { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.card[data-l="ok"] { background: transparent; }
+.card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.pill { font: 600 12px var(--f-body); padding: 3px 10px; border-radius: 999px; letter-spacing: .02em; }
+.pill.crit { color: var(--crit); background: var(--crit-bg); } .pill.high { color: var(--high); background: var(--high-bg); }
+.pill.check { color: var(--check); background: var(--check-bg); } .pill.ok { color: var(--ok); background: var(--ok-bg); }
+.pill.flash { animation: flash .9s ease-out; }
+@keyframes flash { 0% { box-shadow: 0 0 0 0 var(--accent); } 100% { box-shadow: 0 0 0 10px transparent; } }
+@media (prefers-reduced-motion: reduce) { .pill.flash { animation: none; } }
+.cid { font-family: var(--f-mono); font-weight: 600; }
+.why { font-size: 14px; color: var(--muted); }
+.facts { display: grid; gap: 8px; }
+.fact-label { font: 600 11px var(--f-mono); text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.crm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.crm-list li { padding-left: 22px; position: relative; }
+.crm-list li::before { content: ""; position: absolute; left: 2px; top: .5em; width: 10px; height: 6px; border-left: 2px solid var(--ok); border-bottom: 2px solid var(--ok); transform: rotate(-45deg); }
+.chat-box { border: 1.5px dashed var(--chat); background: var(--chat-bg); border-radius: 8px; padding: 8px 10px; display: grid; gap: 4px; color: var(--ink); overflow-wrap: anywhere; }
+.chat-box .fact-label { color: var(--chat); }
+.todo { display: grid; gap: 4px; }
+.todo ol, .todo ul { margin: 0; padding-left: 20px; display: grid; gap: 3px; }
+.flag { font-size: 14px; border-top: 1px solid var(--line); padding-top: 8px; color: var(--muted); }
+.flag::before { content: "ПДн · "; font: 600 11px var(--f-mono); color: var(--crit); letter-spacing: .05em; }
+
+/* --- telegram --- */
+details.tg { border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); }
+details.tg summary { cursor: pointer; padding: 12px 16px; font-weight: 500; }
+.tg-body { padding: 0 16px 16px; }
+.bubble { max-width: 560px; background: var(--surface); border-radius: 14px 14px 14px 4px; padding: 12px 14px; white-space: pre-wrap; font-size: 14px; line-height: 1.45; border: 1px solid var(--line); overflow-wrap: anywhere; }
+
+/* --- try --- */
+.try { display: grid; gap: 12px; }
+.try-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; }
+label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+select, textarea { font: 15px var(--f-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; }
+textarea { min-height: 72px; resize: vertical; }
+.btn { justify-self: start; border: 0; background: var(--accent); color: var(--surface); font: 600 15px var(--f-body); padding: 10px 18px; border-radius: 8px; cursor: pointer; }
+.btn[disabled] { opacity: .55; cursor: wait; }
+.try-out { display: grid; gap: 12px; }
+.note { font-size: 14px; color: var(--muted); }
+.claim-tag { font-family: var(--f-mono); font-size: 13px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; overflow-x: auto; }
+
+/* --- how --- */
+.flow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 10px; counter-reset: s; }
+.flow li { counter-increment: s; border-top: 3px solid var(--accent); padding: 12px 2px 0; display: grid; gap: 4px; }
+.flow li::before { content: counter(s); font: 600 12px var(--f-mono); color: var(--accent); }
+.flow li.llm { border-top-color: var(--chat); } .flow li.llm::before { color: var(--chat); }
+.principles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 14px; }
+.principles div { display: grid; gap: 4px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 24px; }
+.two ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+footer { border-top: 1px solid var(--line); padding-top: 18px; font-size: 14px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px 20px; }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Руссмаркет · тестовое задание · AI-автоматизация</div>
+    <h1>Утренняя сводка support</h1>
+    <p class="lead">Каждое утро support-отдел сверяет статусы в CRM с тем, что пишут в рабочих чатах, и составляет список дел. Это решение делает список само: сроки и статусы проверяют правила, модель только понимает, что утверждается в сообщениях. Сообщение из чата никогда не закрывает задачу — подтверждение есть только в CRM.</p>
+    <div class="links">
+      <a href="https://github.com/balykin23/russmarket-support-digest" target="_blank" rel="noopener">Код и тесты на GitHub</a>
+      <span class="muted">Никита Балыкин</span>
+    </div>
+  </header>
+
+  <section aria-labelledby="demo-h">
+    <div class="sec-head">
+      <h2 id="demo-h">Подвиньте время — сводка пересчитается</h2>
+      <p class="muted">Данные из задания не меняются, меняется только «сейчас». Посмотрите, как П-08 становится срочным ровно в 10:00, а С-17 — во вторник утром. Здесь работают те же правила, что в прототипе, и записанные ответы модели, поэтому страница не обращается ни к какому серверу.</p>
+    </div>
+    <div class="board">
+      <div class="ctrl">
+        <div class="ctrl-row">
+          <div class="clock">
+            <span class="eyebrow">Сейчас</span>
+            <span class="big" id="clock">Пн 19.10 · 10:00</span>
+          </div>
+          <div class="seg" role="group" aria-label="Набор случаев">
+            <button type="button" id="ds-main" aria-pressed="true">4 случая из задания</button>
+            <button type="button" id="ds-edge" aria-pressed="false">6 пограничных</button>
+          </div>
+        </div>
+        <div class="ruler">
+          <input type="range" id="t" min="0" max="89" step="1" value="8" aria-label="Время: понедельник 08:00 — вторник 19:00">
+          <div class="ticks" id="ticks" aria-hidden="true"></div>
+        </div>
+        <div class="presets" aria-label="Быстрый выбор времени">
+          <button class="chip" type="button" data-q="6">Пн 09:30 — до срока П-08</button>
+          <button class="chip" type="button" data-q="8">Пн 10:00 — как в задании</button>
+          <button class="chip" type="button" data-q="22">Пн 13:30 — после обещанных 13:00</button>
+          <button class="chip" type="button" data-q="49">Вт 09:00 — первый выход С-17</button>
+        </div>
+      </div>
+      <div class="verdict" id="verdict" aria-live="polite"></div>
+      <div class="cards" id="cards"></div>
+      <details class="tg">
+        <summary>Как эта сводка приходит в Telegram-чат отдела</summary>
+        <div class="tg-body"><div class="bubble" id="tg"></div></div>
+      </details>
+    </div>
+  </section>
+
+  <section aria-labelledby="try-h" id="try" hidden>
+    <div class="sec-head">
+      <h2 id="try-h">Добавьте своё сообщение</h2>
+      <p class="muted">Напишите, что мог бы написать сотрудник, курьер или руководитель. Сообщение разберёт Claude по той же инструкции, что и в прототипе, а решение примут те же правила. Время берётся с ползунка выше.</p>
+    </div>
+    <form class="board try" id="try-form">
+      <div class="try-grid">
+        <label for="try-case">К какому случаю
+          <select id="try-case"></select>
+        </label>
+        <label for="try-role">Кто пишет
+          <select id="try-role">
+            <option value="employee">Сотрудник</option>
+            <option value="manager">Руководитель</option>
+            <option value="courier">Курьер</option>
+            <option value="recipient">Получатель на точке</option>
+          </select>
+        </label>
+      </div>
+      <label for="try-text">Сообщение
+        <textarea id="try-text" maxlength="400">Карты привёз, но на точке закрыто, жду до 14:30</textarea>
+      </label>
+      <button class="btn" type="submit" id="try-btn">Разобрать и пересчитать</button>
+      <div class="try-out" id="try-out" aria-live="polite"></div>
+    </form>
+  </section>
+
+  <section aria-labelledby="how-h">
+    <div class="sec-head">
+      <h2 id="how-h">Как это устроено</h2>
+      <p class="muted">Модель отвечает только на один вопрос — что утверждается в сообщении. Всё, что можно проверить по датам и статусам, проверяет код: это надёжнее, дешевле и проверяемо тестами.</p>
+    </div>
+    <ol class="flow">
+      <li><h3>Сбор</h3><span class="muted">Статусы из CRM и сообщения из рабочих чатов по каждому случаю.</span></li>
+      <li><h3>Маскирование</h3><span class="muted">Телефоны, почта, номера карт, паспортов, СНИЛС и ИНН заменяются метками.</span></li>
+      <li class="llm"><h3>Модель</h3><span class="muted">Тип утверждения, новое время, «передано в личку». Строгий JSON по схеме.</span></li>
+      <li><h3>Правила</h3><span class="muted">Срочность, порядок, кому и что сделать. Битый ответ модели — «прочитать вручную».</span></li>
+      <li><h3>Сводка</h3><span class="muted">Сообщение в чат отдела. Слова из чата цитируются дословно.</span></li>
+    </ol>
+    <div class="principles">
+      <div><h3>Чат не закрывает задачу</h3><p class="muted">«Он в курсе», «карты пришли» — это утверждения. Сводка показывает их отдельно и говорит, где взять подтверждение.</p></div>
+      <div><h3>Чат может только поднять срочность</h3><p class="muted">Жалоба на недостачу при статусе «Принято» превращает спокойный случай в задачу.</p></div>
+      <div><h3>Случай не теряется</h3><p class="muted">Модель недоступна или запись в CRM битая — случай всё равно в сводке, с пометкой «проверить вручную».</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="chk-h">
+    <div class="sec-head"><h2 id="chk-h">Что проверено</h2></div>
+    <div class="two">
+      <div>
+        <h3>Проверено на практике</h3>
+        <ul>
+          <li>4 случая из задания и 6 пограничных — живой прогон модели gpt-5.4-mini, все разобраны верно.</li>
+          <li>31 автотест правил, включая битые ответы модели и битые записи CRM.</li>
+          <li>Настоящий сбой доступа к модели: ни один случай не пропал.</li>
+          <li>Отправка сводки в Telegram через тестового бота.</li>
+          <li>Независимое ревью кода: 9 найденных дыр в правилах исправлены.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Ещё нужно проверить</h3>
+        <ul>
+          <li>Реальные данные CRM и чатов, привязку сообщения к случаю.</li>
+          <li>Точность модели на 50–100 размеченных сообщениях от отдела.</li>
+          <li>Модель в российском контуре (YandexGPT, GigaChat) — для персональных данных.</li>
+          <li>Маскирование имён: нужен NER, регулярных выражений мало.</li>
+          <li>Порядок при равной срочности и адресатов действий — согласовать с отделом.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Никита Балыкин · тестовое задание для Руссмаркет</span>
+    <a href="https://github.com/balykin23/russmarket-support-digest" target="_blank" rel="noopener">github.com/balykin23/russmarket-support-digest</a>
+  </footer>
+</div>
+
+<script>
+// Rules ported 1:1 from summary.py (github.com/balykin23/russmarket-support-digest).
+const CRITICAL = 0, HIGH = 1, CHECK = 2, OK = 3;
+const LEVEL = {
+  0: { label: "Срочно", key: "crit" },
+  1: { label: "До конца дня", key: "high" },
+  2: { label: "Проверить", key: "check" },
+  3: { label: "Действий нет", key: "ok" },
+};
+const TYPE_RANK = { offboarding: 0, card_delivery: 1, onboarding: 2 };
+const TYPE_REASON = {
+  offboarding: "при равной срочности увольнение идёт первым: расчёт и документы выдаются в последний рабочий день, ошибку потом не исправить",
+  card_delivery: "при равной срочности доставка идёт раньше оформления: по ней хватает звонка на точку",
+};
+const ROLE_RU = { employee: "Сотрудник", courier: "Курьер", recipient: "Получатель", manager: "Руководитель" };
+const CLAIMS = ["documents_sent", "manager_informed", "delivery_delayed", "delivery_received", "problem_reported", "no_info", "other"];
+const IN_TRANSIT = "В пути", ACCEPTED = "Принято", CANCELLED = "Отменено";
+
+const PII = [
+  ["[КАРТА]", /\b(?:\d[ -]?){15}\d\b/g],
+  ["[ТЕЛЕФОН]", /(?:\+7|\b8)[\s\-()]*\d{3}[\s\-()]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}\b/g],
+  ["[EMAIL]", /\b[\w.+-]+@[\w-]+\.[\w.-]+\b/g],
+  ["[СНИЛС]", /\b\d{3}-\d{3}-\d{3}[ -]?\d{2}\b/g],
+  ["[ДОКУМЕНТ]", /\b\d{2}\s?\d{2}\s?\d{6}\b|\b\d{12}\b/g],
+];
+function maskPii(t) { for (const [tok, re] of PII) t = t.replace(re, tok); return t; }
+
+// Naive local date-times, no time zones: "2026-10-19" or "2026-10-19T10:00:00".
+function parseDT(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(String(s));
+  if (!m) throw new Error(`неверная дата «${s}»`);
+  return new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
+}
+const dayOnly = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const dayDiff = (a, b) => Math.round((dayOnly(b) - dayOnly(a)) / 86400000);
+const pad = (n) => String(n).padStart(2, "0");
+const hm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const dm = (d) => `${pad(d.getDate())}.${pad(d.getMonth() + 1)}`;
+function relDay(d, today) {
+  const n = dayDiff(today, d);
+  return { 0: "сегодня", 1: "завтра", "-1": "вчера" }[n] ?? (n > 0 ? `через ${n} дн.` : `${-n} дн. назад`);
+}
+const fmtDT = (d, now) => (dayDiff(now, d) === 0 ? `сегодня ${hm(d)}` : `${dm(d)} ${hm(d)}`);
+function businessDaysLeft(today, target) {
+  const n = dayDiff(today, target);
+  if (n <= 0) return n;
+  let c = 0;
+  for (let i = 1; i <= n; i++) {
+    const wd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i).getDay();
+    if (wd !== 0 && wd !== 6) c++;
+  }
+  return c;
+}
+const levelByDays = (d) => (d <= 0 ? CRITICAL : d === 1 ? HIGH : d <= 3 ? CHECK : OK);
+
+function newA(c) {
+  return {
+    case: c, level: OK, why: "", crm: [], chat: [], check: [], actions: [], flags: [],
+    raise(l, w) { if (l < this.level) { this.level = l; this.why = w; } },
+  };
+}
+
+function onboarding(a, crm, now) {
+  const fd = parseDT(crm.first_day), days = businessDaysLeft(now, fd);
+  a.crm.push(`Первый выход: ${dm(fd)} (${relDay(fd, now)})`);
+  if (crm.documents_received) { a.crm.push("Документы получены"); return; }
+  a.crm.push("Документы НЕ получены");
+  const l = levelByDays(days);
+  if (l === OK) { a.why = `первый выход ${relDay(fd, now)} — документы пока не горят`; return; }
+  if (days < 0) {
+    a.raise(l, "первый выход уже прошёл, а документов в CRM нет");
+    a.actions.push("Руководителю: выяснить, вышел ли сотрудник и на каком основании допущен без документов");
+  } else a.raise(l, `первый выход ${relDay(fd, now)}, документов в CRM нет`);
+  a.check.push("Где документы сейчас, все ли они есть и читаются ли");
+  a.actions.push("Получить документы в рабочем канале и отметить получение в CRM");
+}
+
+function offboarding(a, crm, now) {
+  const ld = parseDT(crm.last_day), days = businessDaysLeft(now, ld);
+  a.crm.push(`Последний рабочий день: ${dm(ld)} (${relDay(ld, now)})`);
+  if (crm.manager_confirmed) { a.crm.push("Руководитель подтвердил"); return; }
+  a.crm.push("Подтверждения руководителя НЕТ");
+  const l = levelByDays(days);
+  if (l === OK) { a.why = `увольнение ${relDay(ld, now)} — подтверждение пока не горит`; return; }
+  a.raise(l, `последний день ${relDay(ld, now)}, руководитель не подтвердил`);
+  a.actions.push("Руководителю напрямую: подтвердить увольнение в CRM; нет ответа до обеда — эскалировать");
+  if (days <= 0) a.actions.push("Предупредить HR и бухгалтерию: расчёт и документы — сегодня, подтверждения пока нет");
+}
+
+function delivery(a, crm, now) {
+  const dl = parseDT(crm.deadline), st = crm.status || "";
+  if (st === ACCEPTED) {
+    if (crm.accepted_at) a.crm.push(`Статус «Принято», приёмка ${fmtDT(parseDT(crm.accepted_at), now)}`);
+    else { a.crm.push("Статус «Принято», но время приёмки не заполнено"); a.raise(CHECK, "статус «Принято» без времени приёмки"); a.check.push("Проверить запись о приёмке в CRM"); }
+    return;
+  }
+  a.crm.push(`Статус «${st}», срок доставки ${fmtDT(dl, now)}`);
+  if (st === CANCELLED) { a.raise(CHECK, "доставка отменена"); a.actions.push("Уточнить, будет ли повторная доставка, и предупредить точку"); return; }
+  if (st !== IN_TRANSIT) { a.raise(CHECK, `неизвестный статус доставки «${st}»`); a.check.push("Проверить статус доставки в CRM"); }
+  if (now >= dl) {
+    const late = Math.floor((now - dl) / 60000);
+    a.crm.push(late === 0 ? "Срок наступил, приёмки нет" : late < 60 ? `Срок прошёл ${late} мин назад, приёмки нет` : `Срок прошёл ${Math.floor(late / 60)} ч ${late % 60} мин назад, приёмки нет`);
+    a.raise(CRITICAL, "срок доставки наступил, в CRM карты не приняты");
+  }
+}
+
+const quote = (t) => "«" + (t.length <= 200 ? t : t.slice(0, 197) + "...") + "»";
+
+function applyDelay(a, it, role, q, crm, now) {
+  const eta = it.eta;
+  a.chat.push(`${role}: ${q}${eta && !q.includes(eta) ? ` (новое время ${eta})` : ""} — в CRM не отражено`);
+  if (!eta) { a.raise(CHECK, "курьер сообщает о задержке, но не называет время"); a.actions.push("Узнать у курьера точное время прибытия и внести в CRM"); return; }
+  const dl = parseDT(crm.deadline);
+  const base = dayDiff(now, dl) > 0 ? dl : now;
+  const [h, m] = eta.split(":").map(Number);
+  const etaD = new Date(base.getFullYear(), base.getMonth(), base.getDate(), h, m);
+  if (etaD <= now) { a.raise(CHECK, `курьер называл ${eta}, это время уже прошло`); a.actions.push("Связаться с курьером: названное время прошло, где карты"); return; }
+  if (etaD > dl) {
+    if (now < dl) a.raise(HIGH, `курьер прогнозирует опоздание: ${eta} при сроке ${hm(dl)}`);
+    a.actions.unshift(`Предупредить точку: карты будут не раньше ${eta}; уточнить, работает ли она в это время`);
+    a.actions.push(`Обновить срок в CRM и проверить статус после ${eta}`);
+  }
+}
+
+function applyChat(a, items, now) {
+  const t = a.case.type, crm = a.case.crm, msgs = a.case.chat || [];
+  const progress = items.filter((i) => i.claim === "delivery_delayed" || i.claim === "delivery_received").map((i) => i.index);
+  const superseded = new Set(progress.slice(0, -1));
+  for (const it of items) {
+    const msg = msgs[it.index], author = msg.author_role, role = ROLE_RU[author] || author, q = quote(msg.text), c = it.claim;
+    if (c === "no_info") continue;
+    if (it.unofficial_channel) a.flags.push("Данные переданы в обход рабочего канала (личные сообщения) — перевести в рабочий канал" + (t === "onboarding" ? "; документы с персональными данными из лички удалить" : ""));
+    if (superseded.has(it.index)) { a.chat.push(`${role}: ${q} — устарело, есть более позднее сообщение`); continue; }
+    if (c === "documents_sent" && t === "onboarding") {
+      if (crm.documents_received) a.chat.push(`${role}: ${q} — совпадает с CRM`);
+      else if (author === "manager") { a.chat.push(`${role}: ${q} — в CRM не отмечено`); a.actions.unshift("Руководителю: отметить получение документов в CRM"); }
+      else {
+        a.chat.push(`${role}: ${q} — в CRM не подтверждено`);
+        a.check.push("Подтвердить у руководителя, что документы действительно у него");
+        a.actions.unshift("Руководителю: переслать документы в рабочий канал; сотруднику: принести оригиналы к первому выходу");
+      }
+    } else if (c === "manager_informed" && t === "offboarding") {
+      if (crm.manager_confirmed) a.chat.push(`${role}: ${q} — совпадает с CRM`);
+      else if (author === "manager") { a.chat.push(`${role}: ${q} — руководитель пишет сам, но в CRM не отмечено`); a.actions.unshift("Руководителю: продублировать подтверждение в CRM"); }
+      else { a.chat.push(`${role}: ${q} — это слова сотрудника, не подтверждение`); a.check.push("Слова сотрудника не заменяют подтверждение — спросить руководителя напрямую"); }
+    } else if (c === "delivery_received" && t === "card_delivery") {
+      if (crm.status === ACCEPTED) a.chat.push(`${role}: ${q} — совпадает с CRM`);
+      else {
+        a.chat.push(`${role}: ${q} — в CRM приёмки нет`);
+        if (a.level === CRITICAL) a.why = "срок прошёл; точка пишет, что карты пришли, но в CRM приёмки нет";
+        a.check.push("Подтвердить у точки получение и количество");
+        a.actions.unshift("Попросить точку провести приёмку в CRM");
+      }
+    } else if (c === "delivery_delayed" && t === "card_delivery") applyDelay(a, it, role, q, crm, now);
+    else if (c === "problem_reported") {
+      a.chat.push(`${role}: ${q} — в CRM не отражено`);
+      a.raise(HIGH, "в переписке сообщают о проблеме, которой нет в CRM");
+      a.check.push("Связаться с автором сообщения и подтвердить проблему");
+      a.actions.push("Если подтвердится — зафиксировать расхождение в CRM");
+    } else {
+      a.chat.push(`${role}: ${q}`);
+      a.raise(CHECK, "в переписке есть сообщение, которое правила не покрывают");
+      a.check.push("Прочитать сообщение и решить, нужно ли действие");
+    }
+  }
+}
+
+function validate(raw, n) {
+  if (!raw || typeof raw !== "object" || !Array.isArray(raw.messages)) throw new Error("ответ модели не соответствует схеме");
+  const seen = new Set();
+  for (const it of raw.messages) {
+    if (!Number.isInteger(it.index) || it.index < 0 || it.index >= n || seen.has(it.index)) throw new Error("неверный index");
+    if (!CLAIMS.includes(it.claim)) throw new Error("неизвестный тип утверждения");
+    if (it.eta != null && !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(it.eta))) throw new Error("неверный формат времени");
+    if (typeof it.unofficial_channel !== "boolean") it.unofficial_channel = false;
+    seen.add(it.index);
+  }
+  if (seen.size !== n) throw new Error("модель разобрала не все сообщения");
+  return [...raw.messages].sort((x, y) => x.index - y.index);
+}
+
+function assessInner(c, now, answer) {
+  const a = newA(c), crm = c.crm;
+  if (c.type === "onboarding") onboarding(a, crm, now);
+  else if (c.type === "offboarding") offboarding(a, crm, now);
+  else if (c.type === "card_delivery") delivery(a, crm, now);
+  else a.raise(CHECK, `неизвестный тип операции «${c.type}»`);
+  const n = (c.chat || []).length;
+  let items = [];
+  if (n) {
+    try { items = validate(answer, n); }
+    catch (e) {
+      a.chat.push(`Переписку не удалось разобрать автоматически (${e.message})`);
+      a.check.push("Прочитать переписку по кейсу вручную");
+      a.raise(CHECK, "переписку не удалось разобрать автоматически");
+      return a;
+    }
+  }
+  applyChat(a, items, now);
+  if (c.type === "card_delivery" && a.level === CRITICAL && !items.some((i) => i.claim === "delivery_delayed" || i.claim === "delivery_received")) {
+    a.actions.push("Узнать у курьера, где карты и когда будут, внести в CRM");
+    a.actions.push("Предупредить точку о задержке");
+  }
+  if (!n && a.level !== OK) a.chat.push("Переписки по кейсу нет");
+  if (a.level === OK && (a.check.length || a.actions.length)) a.raise(CHECK, a.why || "есть открытые вопросы");
+  for (const k of ["check", "actions", "flags"]) a[k] = [...new Set(a[k])];
+  return a;
+}
+
+function assess(c, now, answer) {
+  try { return assessInner(c, now, answer); }
+  catch (e) {
+    const a = newA(c);
+    a.raise(CHECK, "данные CRM по кейсу некорректны");
+    a.crm.push(`Запись не удалось разобрать (${e.message})`);
+    a.check.push("Открыть кейс в CRM и проверить поля вручную");
+    return a;
+  }
+}
+
+function runAll(cases, now, answers) {
+  return cases.map((c) => assess(c, now, answers[c.id]))
+    .sort((x, y) => x.level - y.level || (TYPE_RANK[x.case.type] ?? 9) - (TYPE_RANK[y.case.type] ?? 9) || x.case.id.localeCompare(y.case.id));
+}
+
+if (typeof module !== "undefined") module.exports = { runAll, assess, parseDT, maskPii, LEVEL };
+
+</script>
+<script>
+const DATA = {"main": {"now": "2026-10-19T10:00:00", "cases": [{"id": "С-17", "type": "onboarding", "title": "Оформление сотрудника", "crm": {"first_day": "2026-10-20", "documents_received": false, "note": "Первый выход — завтра. Документы ожидаются."}, "chat": [{"author_role": "employee", "text": "Вчера отправил фотографии документов руководителю в личку."}]}, {"id": "С-24", "type": "offboarding", "title": "Увольнение сотрудника", "crm": {"last_day": "2026-10-19", "manager_confirmed": false, "note": "Последний рабочий день — сегодня. Подтверждение ответственного руководителя отсутствует."}, "chat": [{"author_role": "employee", "text": "С руководителем всё обсудили, он в курсе."}]}, {"id": "П-08", "type": "card_delivery", "title": "Поставка карт", "crm": {"status": "В пути", "deadline": "2026-10-19T10:00:00", "accepted_at": null, "note": "Доставка на точку запланирована сегодня до 10:00. Статус «В пути»."}, "chat": [{"author_role": "courier", "text": "Задерживаюсь, раньше 13:00 не приеду."}]}, {"id": "П-09", "type": "card_delivery", "title": "Поставка карт", "crm": {"status": "Принято", "deadline": "2026-10-19T10:00:00", "accepted_at": "2026-10-19T09:20:00", "note": "Статус «Принято». Приёмка подтверждена сегодня в 09:20."}, "chat": [{"author_role": "recipient", "text": "Карты получили, количество проверили."}]}]}, "edge": {"now": "2026-10-19T10:00:00", "cases": [{"id": "E-01", "type": "card_delivery", "title": "Чат говорит «получили», CRM — «В пути», срок прошёл", "crm": {"status": "В пути", "deadline": "2026-10-19T09:00:00", "accepted_at": null}, "chat": [{"author_role": "recipient", "text": "Всё пришло, спасибо!"}]}, {"id": "E-02", "type": "card_delivery", "title": "CRM — «Принято», а в чате жалоба на недостачу", "crm": {"status": "Принято", "deadline": "2026-10-19T10:00:00", "accepted_at": "2026-10-19T08:50:00"}, "chat": [{"author_role": "recipient", "text": "Пересчитали — не хватает двух карт, в пачке 48 вместо 50."}]}, {"id": "E-03", "type": "offboarding", "title": "Увольнение через неделю, переписки нет", "crm": {"last_day": "2026-10-26", "manager_confirmed": false}, "chat": []}, {"id": "E-04", "type": "onboarding", "title": "CRM в норме, в чате неясный сигнал", "crm": {"first_day": "2026-10-22", "documents_received": true}, "chat": [{"author_role": "employee", "text": "Тут кое-что поменялось по выходу, позвоню."}]}, {"id": "E-05", "type": "onboarding", "title": "Первый выход уже прошёл, документов нет; в сообщении телефон", "crm": {"first_day": "2026-10-16", "documents_received": false}, "chat": [{"author_role": "employee", "text": "Документы принесу в офис, если что звоните +7 916 123-45-67."}]}, {"id": "E-06", "type": "card_delivery", "title": "Доставка ещё не просрочена, но курьер пишет, что опоздает", "crm": {"status": "В пути", "deadline": "2026-10-19T15:00:00", "accepted_at": null}, "chat": [{"author_role": "courier", "text": "Пробки, буду к 17 часам."}]}]}, "answers": {"С-17": {"messages": [{"index": 0, "claim": "documents_sent", "eta": null, "unofficial_channel": true}]}, "С-24": {"messages": [{"index": 0, "claim": "manager_informed", "eta": null, "unofficial_channel": false}]}, "П-08": {"messages": [{"index": 0, "claim": "delivery_delayed", "eta": "13:00", "unofficial_channel": false}]}, "П-09": {"messages": [{"index": 0, "claim": "delivery_received", "eta": null, "unofficial_channel": false}]}, "E-01": {"messages": [{"index": 0, "claim": "delivery_received", "eta": null, "unofficial_channel": false}]}, "E-02": {"messages": [{"index": 0, "claim": "problem_reported", "eta": null, "unofficial_channel": false}]}, "E-04": {"messages": [{"index": 0, "claim": "other", "eta": null, "unofficial_channel": false}]}, "E-05": {"messages": [{"index": 0, "claim": "other", "eta": null, "unofficial_channel": false}]}, "E-06": {"messages": [{"index": 0, "claim": "delivery_delayed", "eta": "17:00", "unofficial_channel": false}]}}};
+const PROMPT = "Ты разбираешь сообщения из рабочих чатов support-отдела. Отдел следит за\nоформлением и увольнением сотрудников и за доставкой банковских карт на точки.\n\nТвоя задача — только извлечь, ЧТО утверждается в каждом сообщении.\nНе оценивай, правда ли это. Не решай, нужно ли вмешиваться. Не ставь приоритет.\nНе додумывай факты, которых нет в тексте.\n\nДля каждого сообщения верни:\n- index — номер сообщения из входных данных;\n- claim — одно значение:\n  documents_sent — сотрудник говорит, что УЖЕ отправил/передал документы\n    (обещание передать позже — это other);\n  manager_informed — кто-то говорит, что руководитель в курсе/согласовал;\n  delivery_delayed — сообщают о задержке доставки или новом времени прибытия;\n  delivery_received — получатель говорит, что карты пришли;\n  problem_reported — сообщают о проблеме: недостача, брак, не тот адрес, отказ и т.п.;\n  no_info — приветствие, благодарность, ничего по делу;\n  other — что-то важное, что не подходит под варианты выше;\n- eta — новое время прибытия в формате HH:MM, если оно названо; иначе null.\n  «приеду не раньше 15:30» → \"15:30\"; «буду к четырём часам дня» → \"16:00\";\n- unofficial_channel — true, если сказано, что документы или данные переданы\n  в обход рабочего процесса (личные сообщения, личная почта, «скинул в личку»);\n  иначе false.\n\nЕсли в сообщении есть несколько утверждений, выбери главное для support-отдела:\nпроблема важнее подтверждения получения.\nОтвет — строго JSON по схеме, без пояснений.";
+const BASE = new Date(2026, 9, 19, 8, 0);   // Mon 19.10.2026 08:00; slider step = 15 min
+const STEPS_PER_DAY_SHOWN = 44;              // 08:00..19:00 = 44 quarters
+const WD = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+const CLAIM_RU = {
+  documents_sent: "говорит, что документы уже отправлены", manager_informed: "говорит, что руководитель в курсе",
+  delivery_delayed: "сообщает о задержке доставки", delivery_received: "говорит, что карты получены",
+  problem_reported: "сообщает о проблеме", no_info: "ничего по делу", other: "другое — правила не покрывают",
+};
+const $ = (id) => document.getElementById(id);
+let dataset = "main";
+let extra = null;           // {caseId, msg, item} — a viewer-added message, applied on top
+let prevLevels = {};
+
+function stepToDate(v) {
+  const day = v < STEPS_PER_DAY_SHOWN + 1 ? 0 : 1;
+  const q = day === 0 ? v : v - (STEPS_PER_DAY_SHOWN + 1);
+  const mins = 8 * 60 + Math.min(q, STEPS_PER_DAY_SHOWN) * 15;
+  return new Date(2026, 9, 19 + day, Math.floor(mins / 60), mins % 60);
+}
+function fmtClock(d) { return `${WD[d.getDay()]} ${dm(d)} · ${hm(d)}`; }
+
+function buildTicks() {
+  const el = $("ticks"), max = +$("t").max;
+  const add = (v, txt, cls) => { const s = document.createElement("span"); s.textContent = txt; if (cls) s.className = cls; s.style.left = (v / max * 100) + "%"; el.append(s); };
+  for (let d = 0; d < 2; d++) {
+    const off = d * (STEPS_PER_DAY_SHOWN + 1);
+    for (const h of [8, 10, 12, 14, 16, 18]) add(off + (h - 8) * 4, pad(h), [h === 10 && d === 0 ? "mark" : "", h % 4 ? "minor" : ""].join(" ").trim());
+    const day = document.createElement("span"); day.className = "day"; day.textContent = d ? "Вт 20.10" : "Пн 19.10";
+    day.style.left = (off / max * 100) + "%"; if (d) day.style.transform = "none"; el.append(day);
+  }
+}
+
+function currentCases() {
+  const src = DATA[dataset].cases.map((c) => structuredClone(c));
+  const answers = structuredClone(DATA.answers);
+  if (extra && src.some((c) => c.id === extra.caseId)) {
+    const c = src.find((c) => c.id === extra.caseId);
+    c.chat = (c.chat || []).concat([extra.msg]);
+    const item = { ...extra.item, index: c.chat.length - 1 };
+    const prev = answers[c.id]?.messages || [];
+    answers[c.id] = { messages: prev.concat([item]) };
+  }
+  return { cases: src, answers };
+}
+
+function li(parent, tag, items) { const l = document.createElement(tag); for (const t of items) { const i = document.createElement("li"); i.textContent = t; l.append(i); } parent.append(l); }
+
+function card(r) {
+  const lv = LEVEL[r.level], el = document.createElement("article");
+  el.className = "card"; el.dataset.l = lv.key;
+  const head = document.createElement("div"); head.className = "card-head";
+  const pill = document.createElement("span"); pill.className = `pill ${lv.key}`; pill.textContent = lv.label;
+  if (prevLevels[r.case.id] !== undefined && prevLevels[r.case.id] !== r.level) pill.classList.add("flash");
+  const id = document.createElement("span"); id.className = "cid"; id.textContent = r.case.id;
+  const t = document.createElement("span"); t.textContent = r.case.title;
+  head.append(pill, id, t); el.append(head);
+  if (r.why) { const w = document.createElement("p"); w.className = "why"; w.textContent = (r.level === OK ? "Вмешиваться не нужно: " : "Почему: ") + r.why; el.append(w); }
+  else if (r.level === OK) { const w = document.createElement("p"); w.className = "why"; w.textContent = "Вмешиваться не нужно: CRM и переписка сходятся."; el.append(w); }
+  const f = document.createElement("div"); f.className = "facts";
+  const l1 = document.createElement("div"); l1.className = "fact-label"; l1.textContent = "Подтверждено в CRM"; f.append(l1); li(f, "ul", r.crm); f.lastChild.className = "crm-list";
+  if (r.chat.length) {
+    const box = document.createElement("div"); box.className = "chat-box";
+    const l2 = document.createElement("div"); l2.className = "fact-label"; l2.textContent = "Только из переписки"; box.append(l2);
+    for (const x of r.chat) { const p = document.createElement("p"); p.textContent = maskPii(x); box.append(p); }
+    f.append(box);
+  }
+  el.append(f);
+  if (r.check.length) { const d = document.createElement("div"); d.className = "todo"; const h = document.createElement("div"); h.className = "fact-label"; h.textContent = "Проверить перед действием"; d.append(h); li(d, "ul", r.check); el.append(d); }
+  if (r.actions.length) { const d = document.createElement("div"); d.className = "todo"; const h = document.createElement("div"); h.className = "fact-label"; h.textContent = "Дальше"; d.append(h); li(d, "ol", r.actions); el.append(d); }
+  for (const x of r.flags) { const p = document.createElement("p"); p.className = "flag"; p.textContent = x; el.append(p); }
+  return el;
+}
+
+function telegram(results, now) {
+  const todo = results.filter((r) => r.level !== OK);
+  const icon = { 0: "🔴", 1: "🟠", 2: "🟡", 3: "🟢" };
+  const L = [`Сводка support · ${WD[now.getDay()]} ${hm(now)}`, `Требуют действий: ${todo.length} из ${results.length}`];
+  if (todo.length) L.push(`▶️ Начать с ${todo[0].case.id} — ${todo[0].why}`);
+  for (const r of results) {
+    L.push("");
+    if (r.level === OK) { L.push(`${icon[r.level]} ${LEVEL[r.level].label} ${r.case.id} · ${r.case.title}: ${r.crm.join("; ")}`); continue; }
+    L.push(`${icon[r.level]} ${LEVEL[r.level].label} ${r.case.id} · ${r.case.title}`);
+    r.crm.forEach((x) => L.push(`✅ ${x}`)); r.chat.forEach((x) => L.push(`💬 ${maskPii(x)}`));
+    if (r.check.length) L.push(`🔎 ${r.check.join("; ")}`);
+    r.actions.forEach((x) => L.push(`👉 ${x}`)); r.flags.forEach((x) => L.push(`⚠️ ${x}`));
+  }
+  L.push("", "✅ — CRM, 💬 — только переписка. Перед действием сверь с CRM.");
+  return L.join("\n");
+}
+
+function render() {
+  const now = stepToDate(+$("t").value);
+  $("clock").textContent = fmtClock(now);
+  const { cases, answers } = currentCases();
+  const results = runAll(cases, now, answers);
+  const todo = results.filter((r) => r.level !== OK);
+  const v = $("verdict"); v.replaceChildren();
+  const s = document.createElement("p"); s.className = "start";
+  if (todo.length) {
+    s.append("Требуют действий: ", Object.assign(document.createElement("b"), { textContent: `${todo.length} из ${results.length}` }), ". Начать с ", Object.assign(document.createElement("b"), { textContent: todo[0].case.id }), ` — ${todo[0].why}.`);
+    v.append(s);
+    if (todo.length > 1 && todo[1].level === todo[0].level && todo[1].case.type !== todo[0].case.type && TYPE_REASON[todo[0].case.type]) {
+      const p = document.createElement("p"); p.className = "muted"; p.textContent = `Почему раньше ${todo[1].case.id}: ${TYPE_REASON[todo[0].case.type]}.`; v.append(p);
+    }
+    const o = document.createElement("div"); o.className = "order"; o.append("Порядок:");
+    todo.forEach((r, i) => { if (i) o.append("→"); o.append(Object.assign(document.createElement("b"), { textContent: r.case.id })); });
+    v.append(o);
+  } else { s.textContent = `Действий не требуется: все ${results.length} случая в порядке.`; v.append(s); }
+  $("cards").replaceChildren(...results.map(card));
+  prevLevels = Object.fromEntries(results.map((r) => [r.case.id, r.level]));
+  $("tg").textContent = telegram(results, now);
+}
+
+function setDataset(name) {
+  dataset = name; prevLevels = {};
+  $("ds-main").setAttribute("aria-pressed", String(name === "main"));
+  $("ds-edge").setAttribute("aria-pressed", String(name === "edge"));
+  fillTryCases(); render();
+}
+
+function fillTryCases() {
+  const sel = $("try-case"); const keep = sel.value; sel.replaceChildren();
+  for (const c of DATA[dataset].cases) sel.append(new Option(`${c.id} · ${c.title}`, c.id));
+  if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
+  else if (DATA[dataset].cases.some((c) => c.id === "П-08")) sel.value = "П-08";
+}
+
+$("t").addEventListener("input", render);
+document.querySelectorAll("[data-q]").forEach((b) => b.addEventListener("click", () => { $("t").value = b.dataset.q; render(); }));
+$("ds-main").addEventListener("click", () => setDataset("main"));
+$("ds-edge").addEventListener("click", () => setDataset("edge"));
+buildTicks(); fillTryCases(); render();
+
+// --- Optional: classify a viewer's own message with Claude (only where the viewer can use it) ---
+(async () => {
+  const sample = window.claude?.use ? await window.claude.use("sample").catch(() => null) : null;
+  if (!sample) return;
+  $("try").hidden = false;
+  const out = $("try-out"), btn = $("try-btn");
+  $("try-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const text = $("try-text").value.trim(); if (!text) return;
+    const caseId = $("try-case").value, role = $("try-role").value;
+    const c = DATA[dataset].cases.find((x) => x.id === caseId);
+    const payload = { case_type: c.type, messages: [{ index: 0, author_role: role, text: maskPii(text) }] };
+    btn.disabled = true; out.replaceChildren(Object.assign(document.createElement("p"), { className: "note", textContent: "Claude разбирает сообщение…" }));
+    try {
+      const raw = await sample.json(PROMPT + "\n\nВходные данные:\n" + JSON.stringify(payload, null, 1) +
+        '\n\nОтветь только JSON вида {"messages":[{"index":0,"claim":"...","eta":null,"unofficial_channel":false}]}.', { modelTier: "quick" });
+      const items = validate(raw, 1);
+      extra = { caseId, msg: { author_role: role, text }, item: items[0] };
+      const tag = document.createElement("div"); tag.className = "claim-tag";
+      tag.textContent = `Модель: ${ROLE_RU[role].toLowerCase()} ${CLAIM_RU[items[0].claim]}` + (items[0].eta ? `, время ${items[0].eta}` : "") + (items[0].unofficial_channel ? ", в обход рабочего канала" : "") + `\n${JSON.stringify(items[0])}`;
+      const now = stepToDate(+$("t").value);
+      const { cases, answers } = currentCases();
+      const r = runAll(cases, now, answers).find((x) => x.case.id === caseId);
+      const p = document.createElement("p"); p.className = "note"; p.textContent = `Карточка ${caseId} с учётом нового сообщения (оно также добавлено в сводку выше):`;
+      out.replaceChildren(tag, p, card(r));
+      render();
+    } catch (e) {
+      const msg = e?.code === "not_granted" || e?.code === "sampling_disabled" ? "Разбор недоступен: страница не получила разрешение обращаться к Claude."
+        : e?.code === "rate_limited" ? "Слишком много запросов. Попробуйте через минуту."
+        : e?.code === "invalid_json" || e instanceof Error ? "Модель вернула ответ не по схеме. По правилам такой случай ушёл бы в «прочитать вручную». Попробуйте ещё раз."
+        : "Не получилось связаться с Claude. Попробуйте ещё раз.";
+      out.replaceChildren(Object.assign(document.createElement("p"), { className: "note", textContent: msg }));
+      if (e?.code === "not_granted" || e?.code === "sampling_disabled") $("try").hidden = true;
+    } finally { btn.disabled = false; }
+  });
+})();
+</script>
+</body></html>
